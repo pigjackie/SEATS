@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>高質感教室座位安排系統</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  html, body, div, span, applet, object, iframe, h1, h2, h3, h4, h5, h6, p, blockquote, pre, a, abbr, acronym, address, big, cite, code, del, dfn, em, img, ins, kbd, q, s, samp, small, strike, strong, sub, sup, tt, var, b, u, i, center, dl, dt, dd, ol, ul, li, fieldset, form, label, legend, table, caption, tbody, tfoot, thead, tr, th, td, article, aside, canvas, details, embed, figure, figcaption, footer, header, hgroup, menu, nav, output, ruby, section, summary, time, mark, audio, video {
+    box-sizing: border-box;
+  }
+  body, html { 
+    font-family: "Microsoft JhengHei", sans-serif; 
+    background-color: #121212; 
+    color: #f5f5f5;
+    margin: 0; 
+    padding: 20px; 
+    display: flex; 
+    justify-content: center; 
+  }
+  .main-container { 
+    display: flex; 
+    gap: 20px; 
+    width: 100%; 
+    max-width: 1400px; 
+  }
+  .classroom-panel { 
+    flex: 2; 
+    background: #1e1e1e; 
+    padding: 20px; 
+    border-radius: 10px; 
+    border: 1px solid #d4af37;
+    box-shadow: 0 4px 15px rgba(212, 175, 55, 0.15); 
+    display: flex; 
+    flex-direction: column; 
+    align-items: center; 
+  }
+  .sidebar { 
+    flex: 1; 
+    background: #1e1e1e; 
+    padding: 20px; 
+    border-radius: 10px; 
+    border: 1px solid #d4af37;
+    box-shadow: 0 4px 15px rgba(212, 175, 55, 0.15); 
+    display: flex; 
+    flex-direction: column; 
+    gap: 15px; 
+  }
+  .export-area-wrapper {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px 0;
+    background-color: #1e1e1e;
+  }
+  .podium { 
+    width: 70%; 
+    background: linear-gradient(135deg, #d4af37, #b5952f);
+    color: #000; 
+    text-align: center; 
+    padding: 15px; 
+    margin-top: 40px; 
+    border-radius: 5px; 
+    font-size: 24px; 
+    font-weight: bold; 
+    letter-spacing: 5px; 
+    box-shadow: 0 4px 6px rgba(0,0,0,0.5);
+  }
+  .settings-group { 
+    display: flex; 
+    gap: 15px; 
+    align-items: center; 
+    margin-bottom: 10px; 
+    flex-wrap: wrap;
+    justify-content: center;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #333;
+    width: 100%;
+  }
+  .settings-group input[type="text"], .settings-group input[type="number"] { 
+    padding: 8px; 
+    background: #2a2a2a;
+    color: #fff;
+    border: 1px solid #d4af37; 
+    border-radius: 4px; 
+  }
+  .mode-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #2a2a2a;
+    padding: 10px 15px;
+    border-radius: 5px;
+    border: 1px solid #d4af37;
+    cursor: pointer;
+  }
+  .mode-toggle input {
+    cursor: pointer;
+    width: 18px;
+    height: 18px;
+  }
+  #class-name { width: 140px; }
+  #rows, #cols { width: 60px; }
+  
+  #seat-grid { 
+    display: grid; 
+    gap: 12px; 
+    justify-content: center; 
+  }
+  .seat { 
+    position: relative;
+    width: 85px; 
+    height: 85px; 
+    border: 2px dashed #d4af37; 
+    border-radius: 8px; 
+    background-color: #2a2a2a; 
+    display: flex; 
+    flex-direction: column;
+    align-items: center; 
+    justify-content: flex-end; 
+    padding-bottom: 6px;
+    transition: all 0.3s; 
+    cursor: pointer;
+  }
+  .seat:hover {
+    background-color: #3a3a3a;
+  }
+  .seat.drag-over { 
+    background-color: #4a4a4a; 
+    border-style: solid;
+  }
+  .seat-number {
+    position: absolute;
+    top: 4px;
+    left: 6px;
+    font-size: 12px;
+    color: #d4af37;
+    opacity: 0.8;
+    pointer-events: none;
+    font-family: Arial, sans-serif;
+  }
+  
+  .seat.hidden-seat {
+    opacity: 0;
+    pointer-events: none;
+  }
+  .main-container.edit-mode .seat.hidden-seat {
+    opacity: 0.3;
+    pointer-events: auto;
+    border: 2px dashed #ff4444;
+    background-color: transparent;
+  }
+  .main-container.edit-mode .seat:not(.hidden-seat) {
+    border-style: solid;
+    background-color: #333;
+  }
+
+  .student-card { 
+    position: relative;
+    z-index: 2;
+    width: 90%; 
+    height: 70%; 
+    background: linear-gradient(135deg, #d4af37, #aa8222);
+    color: #000; 
+    display: flex; 
+    align-items: center; 
+    justify-content: center; 
+    border-radius: 5px; 
+    cursor: grab; 
+    font-weight: bold; 
+    font-size: 16px; 
+    user-select: none; 
+    text-align: center;
+    word-break: break-all;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+  }
+  .student-card:active { cursor: grabbing; }
+  
+  textarea { 
+    width: 100%; 
+    height: 120px; 
+    padding: 10px; 
+    background: #2a2a2a;
+    color: #fff;
+    border: 1px solid #d4af37; 
+    border-radius: 5px; 
+    resize: vertical; 
+  }
+  button { 
+    padding: 10px 15px; 
+    background: linear-gradient(135deg, #d4af37, #aa8222);
+    color: #000; 
+    border: none; 
+    border-radius: 5px; 
+    cursor: pointer; 
+    font-size: 16px; 
+    font-weight: bold; 
+    transition: filter 0.3s; 
+  }
+  button:hover { filter: brightness(1.2); }
+  button.btn-danger { background: linear-gradient(135deg, #c53030, #9b2c2c); color: white; }
+  button.btn-success { background: linear-gradient(135deg, #2f855a, #22543d); color: white; }
+  button.btn-export { background: linear-gradient(135deg, #4a5568, #2d3748); color: #d4af37; border: 1px solid #d4af37; }
+  button.btn-export:hover { background: linear-gradient(135deg, #2d3748, #1a202c); }
+  
+  .export-btn-group { display: flex; gap: 10px; }
+  
+  #unassigned-list { 
+    display: flex; 
+    flex-wrap: wrap; 
+    gap: 10px; 
+    min-height: 150px; 
+    padding: 15px; 
+    border: 2px dashed #555; 
+    border-radius: 5px; 
+    background-color: #2a2a2a; 
+    align-items: flex-start; 
+    align-content: flex-start; 
+  }
+  #unassigned-list .student-card { 
+    width: 75px; 
+    height: 75px; 
+  }
+  h3 { margin-top: 0; color: #d4af37; border-bottom: 1px solid #333; padding-bottom: 10px; }
+</style>
+</head>
+<body>
+
+<div class="main-container" id="main-app">
+  <div class="classroom-panel">
+    <div class="settings-group">
+      <label for="class-name">班級：</label>
+      <input type="text" id="class-name" placeholder="例如：高一義班" oninput="updatePodiumText()">
+      <label for="rows">排數(直)：</label>
+      <input type="number" id="rows" value="5" min="1">
+      <label for="cols">列數(橫)：</label>
+      <input type="number" id="cols" value="6" min="1">
+      <button onclick="generateGrid()">重設座位網格</button>
+    </div>
+    
+    <div class="settings-group" style="border-bottom: none; padding-bottom: 0;">
+      <label class="mode-toggle">
+        <input type="checkbox" id="edit-mode-toggle" onchange="toggleEditMode()">
+        開啟「編輯座位形狀」模式 (點擊座位可隱藏或還原)
+      </label>
+      <span style="font-size: 14px; color: #aaa; margin-left: 10px;">非編輯模式下，點擊座位即可輸入或修改姓名</span>
+    </div>
+    
+    <div class="export-area-wrapper" id="export-area">
+      <div id="seat-grid"></div>
+      <div class="podium" id="podium-text">講台</div>
+    </div>
+  </div>
+
+  <div class="sidebar">
+    <h3>批次輸入學生名單</h3>
+    <textarea id="name-input" placeholder="可貼上全班名單，支援換行、空格或逗號分隔"></textarea>
+    <div style="display: flex; gap: 10px;">
+      <button onclick="importStudents()" style="flex: 1;">加入待分配名單</button>
+      <button onclick="clearStudents()" class="btn-danger" style="flex: 1;">全部清空</button>
+    </div>
+
+    <h3>待分配學生區</h3>
+    <div id="unassigned-list" ondragover="allowDrop(event)" ondrop="dropToUnassigned(event)"></div>
+    <button onclick="randomAssign()" class="btn-success">將未排座位學生亂數入座</button>
+
+    <h3>匯出座位表</h3>
+    <div class="export-btn-group">
+      <button onclick="exportWord()" class="btn-export" style="flex: 1;">匯出 Word</button>
+      <button onclick="exportExcel()" class="btn-export" style="flex: 1;">匯出 Excel</button>
+      <button onclick="exportJPG()" class="btn-export" style="flex: 1;">匯出 JPG</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  let draggedElement = null;
+
+  function updatePodiumText() {
+    const className = document.getElementById('class-name').value;
+    const podium = document.getElementById('podium-text');
+    if (className.trim() !== '') {
+      podium.innerText = className + ' 講台';
+    } else {
+      podium.innerText = '講台';
+    }
+  }
+
+  function toggleEditMode() {
+    const app = document.getElementById('main-app');
+    const isEditMode = document.getElementById('edit-mode-toggle').checked;
+    if (isEditMode) {
+      app.classList.add('edit-mode');
+    } else {
+      app.classList.remove('edit-mode');
+    }
+  }
+
+  function generateGrid() {
+    const rows = document.getElementById('rows').value;
+    const cols = document.getElementById('cols').value;
+    const grid = document.getElementById('seat-grid');
+    
+    const existingStudents = grid.querySelectorAll('.student-card');
+    const unassignedList = document.getElementById('unassigned-list');
+    
+    existingStudents.forEach(student => {
+      unassignedList.appendChild(student);
+    });
+
+    grid.innerHTML = '';
+    grid.style.gridTemplateColumns = 'repeat(' + cols + ', 85px)';
+    grid.style.gridTemplateRows = 'repeat(' + rows + ', 85px)';
+
+    for (let i = 0; i < rows; i++) {
+      for (let j = 0; j < cols; j++) {
+        const seat = document.createElement('div');
+        seat.className = 'seat';
+        seat.setAttribute('ondragover', 'allowDrop(event)');
+        seat.setAttribute('ondrop', 'dropToSeat(event, this)');
+        seat.setAttribute('ondragenter', 'dragEnter(event)');
+        seat.setAttribute('ondragleave', 'dragLeave(event)');
+        seat.onclick = function() { handleSeatClick(this); };
+        
+        const seatNum = document.createElement('div');
+        seatNum.className = 'seat-number';
+        seatNum.innerText = (i + 1) + '-' + (j + 1);
+        seat.appendChild(seatNum);
+
+        grid.appendChild(seat);
+      }
+    }
+  }
+
+  function handleSeatClick(seat) {
+    const isEditMode = document.getElementById('edit-mode-toggle').checked;
+    
+    if (isEditMode) {
+      seat.classList.toggle('hidden-seat');
+      return;
+    }
+
+    if (seat.classList.contains('hidden-seat')) return;
+
+    const studentCard = seat.querySelector('.student-card');
+    
+    if (studentCard) {
+      const newName = prompt('修改學生姓名 (若要清空座位請將文字刪除並確定)：', studentCard.innerText);
+      if (newName !== null) {
+        if (newName.trim() === '') {
+          studentCard.remove();
+        } else {
+          studentCard.innerText = newName.trim();
+        }
+      }
+    } else {
+      const name = prompt('請輸入此座位的學生姓名：');
+      if (name && name.trim() !== '') {
+        const student = document.createElement('div');
+        student.className = 'student-card';
+        student.draggable = true;
+        
+        let randomNum = Math.floor(Math.random() / 0.0001);
+        student.id = 'student-' + new Date().getTime() + '-' + randomNum;
+        student.innerText = name.trim();
+        
+        student.addEventListener('dragstart', dragStart);
+        student.addEventListener('dragend', dragEnd);
+        
+        seat.appendChild(student);
+      }
+    }
+  }
+
+  function importStudents() {
+    const input = document.getElementById('name-input').value;
+    if (!input.trim()) return;
+
+    const names = input.split(/[\n, ]+/).filter(name => name.trim() !== '');
+    const unassignedList = document.getElementById('unassigned-list');
+
+    names.forEach((name, index) => {
+      const student = document.createElement('div');
+      student.className = 'student-card';
+      student.draggable = true;
+      let randomNum = Math.floor(Math.random() / 0.0001);
+      student.id = 'student-' + new Date().getTime() + '-' + randomNum + index;
+      student.innerText = name;
+      
+      student.addEventListener('dragstart', dragStart);
+      student.addEventListener('dragend', dragEnd);
+      
+      unassignedList.appendChild(student);
+    });
+
+    document.getElementById('name-input').value = '';
+  }
+
+  function clearStudents() {
+    document.getElementById('unassigned-list').innerHTML = '';
+    const gridStudents = document.querySelectorAll('#seat-grid .student-card');
+    gridStudents.forEach(el => el.remove());
+  }
+
+  function dragStart(event) {
+    draggedElement = event.target;
+    event.dataTransfer.setData('text/plain', event.target.id);
+    setTimeout(() => { event.target.style.opacity = '0.5'; }, 0);
+  }
+
+  function dragEnd(event) {
+    event.target.style.opacity = '1';
+    draggedElement = null;
+    const seats = document.querySelectorAll('.seat');
+    seats.forEach(seat => seat.classList.remove('drag-over'));
+  }
+
+  function allowDrop(event) {
+    event.preventDefault();
+  }
+
+  function dragEnter(event) {
+    event.preventDefault();
+    if (event.currentTarget.classList.contains('seat') && !event.currentTarget.classList.contains('hidden-seat')) {
+      event.currentTarget.classList.add('drag-over');
+    }
+  }
+
+  function dragLeave(event) {
+    if (event.currentTarget.classList.contains('seat')) {
+      event.currentTarget.classList.remove('drag-over');
+    }
+  }
+
+  function dropToSeat(event, seatElement) {
+    event.preventDefault();
+    seatElement.classList.remove('drag-over');
+    
+    if (seatElement.classList.contains('hidden-seat')) return;
+    
+    const data = event.dataTransfer.getData('text/plain');
+    const element = document.getElementById(data);
+    
+    if (element) {
+      const existingStudent = seatElement.querySelector('.student-card');
+      if (existingStudent) {
+        const originalParent = element.parentNode;
+        originalParent.appendChild(existingStudent);
+      }
+      seatElement.appendChild(element);
+    }
+  }
+
+  function dropToUnassigned(event) {
+    event.preventDefault();
+    const data = event.dataTransfer.getData('text/plain');
+    const element = document.getElementById(data);
+    if (element) {
+      document.getElementById('unassigned-list').appendChild(element);
+    }
+  }
+
+  function randomAssign() {
+    const unassignedList = document.getElementById('unassigned-list');
+    const students = Array.from(unassignedList.children);
+    const allSeats = Array.from(document.querySelectorAll('.seat'));
+    
+    const validEmptySeats = allSeats.filter(seat => !seat.querySelector('.student-card') && !seat.classList.contains('hidden-seat'));
+
+    if (students.length === 0) {
+      alert('待分配區沒有學生！');
+      return;
+    }
+    if (validEmptySeats.length === 0) {
+      alert('沒有有效的空座位！');
+      return;
+    }
+
+    let currentIndex = students.length;
+    let randomIndex;
+    while (currentIndex !== 0) {
+      randomIndex = Math.floor(Math.random() / (1 / currentIndex));
+      currentIndex--;
+      let temp = students[currentIndex];
+      students[currentIndex] = students[randomIndex];
+      students[randomIndex] = temp;
+    }
+
+    let assignCount = 0;
+    while (assignCount < students.length && assignCount < validEmptySeats.length) {
+      validEmptySeats[assignCount].appendChild(students[assignCount]);
+      assignCount++;
+    }
+  }
+
+  function getExportClassName() {
+    const classNameInput = document.getElementById('class-name').value;
+    return classNameInput.trim() !== '' ? classNameInput : '教室座位表';
+  }
+
+  function exportWord() {
+    const className = getExportClassName();
+    const rows = document.getElementById('rows').value;
+    const cols = document.getElementById('cols').value;
+    const grid = document.getElementById('seat-grid');
+    const seats = grid.children;
+
+    let tableHtml = '<table border="1" style="border-collapse: collapse; width: 100%; text-align: center; font-family: Microsoft JhengHei;">';
+    
+    let seatIndex = 0;
+    for (let i = 0; i < rows; i++) {
+      tableHtml += '<tr>';
+      for (let j = 0; j < cols; j++) {
+        const seat = seats[seatIndex];
+        if (seat.classList.contains('hidden-seat')) {
+          tableHtml += '<td style="border: none;"></td>';
+        } else {
+          const student = seat.querySelector('.student-card');
+          const name = student ? student.innerText : '';
+          tableHtml += '<td style="width: 85px; height: 85px; padding: 10px; font-size: 18px; border: 1px solid #000;">' + name + '</td>';
+        }
+        seatIndex++;
+      }
+      tableHtml += '</tr>';
+    }
+    
+    tableHtml += '<tr><td colspan="' + cols + '" style="background-color: #d4af37; color: black; font-size: 24px; padding: 15px;">' + className + ' 講台</td></tr>';
+    tableHtml += '</table>';
+
+    const htmlContent = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><title>' + className + '</title></head><body>' + tableHtml + '</body></html>';
+
+    const blob = new Blob(['\ufeff', htmlContent], {type: 'application/msword'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = className + '.doc';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function exportExcel() {
+    const className = getExportClassName();
+    const rows = document.getElementById('rows').value;
+    const cols = document.getElementById('cols').value;
+    const grid = document.getElementById('seat-grid');
+    const seats = grid.children;
+
+    let data = [];
+    
+    let seatIndex = 0;
+    for (let i = 0; i < rows; i++) {
+      let rowData = [];
+      for (let j = 0; j < cols; j++) {
+        const seat = seats[seatIndex];
+        if (seat.classList.contains('hidden-seat')) {
+          rowData.push('');
+        } else {
+          const student = seat.querySelector('.student-card');
+          rowData.push(student ? student.innerText : '');
+        }
+        seatIndex++;
+      }
+      data.push(rowData);
+    }
+
+    data.push([]); 
+    
+    let footer = [];
+    for (let c = 0; c < cols; c++) {
+      footer.push('');
+    }
+    footer[Math.floor(cols / 2)] = className + ' 講台';
+    data.push(footer);
+
+    const ws = XLSX.utils.aoa_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "座位表");
+    XLSX.writeFile(wb, className + '.xlsx');
+  }
+
+  function exportJPG() {
+    const className = getExportClassName();
+    const element = document.getElementById('export-area');
+    
+    html2canvas(element, { backgroundColor: '#1e1e1e' }).then(canvas => {
+      const link = document.createElement('a');
+      link.download = className + '.jpg';
+      link.href = canvas.toDataURL('image/jpeg');
+      link.click();
+    });
+  }
+
+  window.onload = generateGrid;
+</script>
+</body>
+</html>
