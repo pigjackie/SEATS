@@ -127,6 +127,22 @@
   .seat:hover {
     background-color: #3a3a3a;
   }
+  .seat:hover::after {
+    content: "點擊編輯";
+    position: absolute;
+    top: -20px;
+    background: rgba(212, 175, 55, 0.9);
+    color: #000;
+    font-size: 12px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s;
+  }
+  .main-container:not(.edit-mode) .seat:hover::after {
+    opacity: 1;
+  }
   .seat.drag-over { 
     background-color: #4a4a4a; 
     border-style: solid;
@@ -177,6 +193,22 @@
     box-shadow: 0 2px 4px rgba(0,0,0,0.5);
   }
   .student-card:active { cursor: grabbing; }
+
+  .seat-input {
+    position: absolute;
+    bottom: 6px;
+    width: 90%;
+    height: 70%;
+    background: #fff;
+    color: #000;
+    border: 2px solid #d4af37;
+    border-radius: 4px;
+    text-align: center;
+    font-size: 16px;
+    font-weight: bold;
+    outline: none;
+    z-index: 10;
+  }
   
   textarea { 
     width: 100%; 
@@ -245,7 +277,7 @@
         <input type="checkbox" id="edit-mode-toggle" onchange="toggleEditMode()">
         開啟「編輯座位形狀」模式 (點擊座位可隱藏或還原)
       </label>
-      <span style="font-size: 14px; color: #aaa; margin-left: 10px;">非編輯模式下，點擊座位即可輸入或修改姓名</span>
+      <span style="font-size: 14px; color: #aaa; margin-left: 10px;">非編輯模式下，點擊座位即可直接輸入或修改姓名</span>
     </div>
     
     <div class="export-area-wrapper" id="export-area">
@@ -276,7 +308,7 @@
 </div>
 
 <script>
-  let draggedElement = null;
+  let isDragging = false;
 
   function updatePodiumText() {
     const className = document.getElementById('class-name').value;
@@ -322,11 +354,14 @@
         seat.setAttribute('ondrop', 'dropToSeat(event, this)');
         seat.setAttribute('ondragenter', 'dragEnter(event)');
         seat.setAttribute('ondragleave', 'dragLeave(event)');
-        seat.onclick = function() { handleSeatClick(this); };
+        seat.onclick = function(e) { handleSeatClick(this, e); };
         
         const seatNum = document.createElement('div');
         seatNum.className = 'seat-number';
-        seatNum.innerText = (i + 1) + '-' + (j + 1);
+        // 右上到左下的編號邏輯：列數由右至左遞減
+        const colNumber = cols - j;
+        const rowNumber = i + 1;
+        seatNum.innerText = rowNumber + '-' + colNumber;
         seat.appendChild(seatNum);
 
         grid.appendChild(seat);
@@ -334,44 +369,62 @@
     }
   }
 
-  function handleSeatClick(seat) {
-    const isEditMode = document.getElementById('edit-mode-toggle').checked;
+  function handleSeatClick(seat, event) {
+    if (isDragging) return;
     
+    const isEditMode = document.getElementById('edit-mode-toggle').checked;
     if (isEditMode) {
       seat.classList.toggle('hidden-seat');
       return;
     }
 
     if (seat.classList.contains('hidden-seat')) return;
+    if (event.target.tagName === 'INPUT') return;
 
     const studentCard = seat.querySelector('.student-card');
+    const currentValue = studentCard ? studentCard.innerText : '';
+    
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'seat-input';
+    input.value = currentValue;
     
     if (studentCard) {
-      const newName = prompt('修改學生姓名 (若要清空座位請將文字刪除並確定)：', studentCard.innerText);
-      if (newName !== null) {
-        if (newName.trim() === '') {
-          studentCard.remove();
+      studentCard.style.display = 'none';
+    }
+    
+    seat.appendChild(input);
+    input.focus();
+
+    input.onblur = function() {
+      const val = input.value.trim();
+      input.remove();
+      
+      if (val === '') {
+        if (studentCard) studentCard.remove();
+      } else {
+        if (studentCard) {
+          studentCard.innerText = val;
+          studentCard.style.display = 'flex';
         } else {
-          studentCard.innerText = newName.trim();
+          const student = document.createElement('div');
+          student.className = 'student-card';
+          student.draggable = true;
+          let randomNum = Math.floor(Math.random() / 0.0001);
+          student.id = 'student-' + new Date().getTime() + '-' + randomNum;
+          student.innerText = val;
+          student.addEventListener('dragstart', dragStart);
+          student.addEventListener('dragend', dragEnd);
+          seat.appendChild(student);
         }
       }
-    } else {
-      const name = prompt('請輸入此座位的學生姓名：');
-      if (name && name.trim() !== '') {
-        const student = document.createElement('div');
-        student.className = 'student-card';
-        student.draggable = true;
-        
-        let randomNum = Math.floor(Math.random() / 0.0001);
-        student.id = 'student-' + new Date().getTime() + '-' + randomNum;
-        student.innerText = name.trim();
-        
-        student.addEventListener('dragstart', dragStart);
-        student.addEventListener('dragend', dragEnd);
-        
-        seat.appendChild(student);
+    };
+    
+    input.onkeydown = function(e) {
+      if (e.key === 'Enter') {
+        input.blur();
       }
-    }
+    };
   }
 
   function importStudents() {
@@ -405,14 +458,14 @@
   }
 
   function dragStart(event) {
-    draggedElement = event.target;
+    isDragging = true;
     event.dataTransfer.setData('text/plain', event.target.id);
     setTimeout(() => { event.target.style.opacity = '0.5'; }, 0);
   }
 
   function dragEnd(event) {
     event.target.style.opacity = '1';
-    draggedElement = null;
+    setTimeout(() => { isDragging = false; }, 100);
     const seats = document.querySelectorAll('.seat');
     seats.forEach(seat => seat.classList.remove('drag-over'));
   }
@@ -507,7 +560,8 @@
     const grid = document.getElementById('seat-grid');
     const seats = grid.children;
 
-    let tableHtml = '<table border="1" style="border-collapse: collapse; width: 100%; text-align: center; font-family: Microsoft JhengHei;">';
+    let tableHtml = '<div style="text-align:center; font-family: Microsoft JhengHei; margin-bottom: 20px;"><h1 style="font-size: 28px;">' + className + '</h1></div>';
+    tableHtml += '<table align="center" style="border-collapse: collapse; text-align: center; font-family: Microsoft JhengHei; width: 80%;">';
     
     let seatIndex = 0;
     for (let i = 0; i < rows; i++) {
@@ -515,21 +569,25 @@
       for (let j = 0; j < cols; j++) {
         const seat = seats[seatIndex];
         if (seat.classList.contains('hidden-seat')) {
-          tableHtml += '<td style="border: none;"></td>';
+          tableHtml += '<td style="border: none; padding: 10px; width: 100px; height: 70px;"></td>';
         } else {
           const student = seat.querySelector('.student-card');
           const name = student ? student.innerText : '';
-          tableHtml += '<td style="width: 85px; height: 85px; padding: 10px; font-size: 18px; border: 1px solid #000;">' + name + '</td>';
+          const seatNumText = seat.querySelector('.seat-number').innerText;
+          tableHtml += '<td style="border: 2px solid #000; padding: 10px; width: 100px; height: 70px; vertical-align: middle;">';
+          tableHtml += '<div style="font-size: 10px; color: #666; text-align: left;">' + seatNumText + '</div>';
+          tableHtml += '<div style="font-size: 18px; font-weight: bold; margin-top: 5px;">' + name + '</div>';
+          tableHtml += '</td>';
         }
         seatIndex++;
       }
       tableHtml += '</tr>';
     }
     
-    tableHtml += '<tr><td colspan="' + cols + '" style="background-color: #d4af37; color: black; font-size: 24px; padding: 15px;">' + className + ' 講台</td></tr>';
+    tableHtml += '<tr><td colspan="' + cols + '" style="border: 2px solid #000; background-color: #f0f0f0; color: black; font-size: 24px; font-weight: bold; padding: 15px; margin-top: 20px;">' + className + ' 講台</td></tr>';
     tableHtml += '</table>';
 
-    const htmlContent = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><title>' + className + '</title></head><body>' + tableHtml + '</body></html>';
+    const htmlContent = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><title>' + className + '</title></head><body style="background-color: white;">' + tableHtml + '</body></html>';
 
     const blob = new Blob(['\ufeff', htmlContent], {type: 'application/msword'});
     const url = URL.createObjectURL(blob);
@@ -549,6 +607,14 @@
 
     let data = [];
     
+    let titleRow = [];
+    for (let c = 0; c < cols; c++) {
+      titleRow.push('');
+    }
+    titleRow[Math.floor(cols / 2)] = className;
+    data.push(titleRow);
+    data.push([]);
+
     let seatIndex = 0;
     for (let i = 0; i < rows; i++) {
       let rowData = [];
@@ -584,7 +650,10 @@
     const className = getExportClassName();
     const element = document.getElementById('export-area');
     
-    html2canvas(element, { backgroundColor: '#1e1e1e' }).then(canvas => {
+    html2canvas(element, { 
+      backgroundColor: '#1e1e1e',
+      scale: 2 
+    }).then(canvas => {
       const link = document.createElement('a');
       link.download = className + '.jpg';
       link.href = canvas.toDataURL('image/jpeg');
